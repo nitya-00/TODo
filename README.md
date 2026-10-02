@@ -7,6 +7,7 @@ A private exploration studio for turning a long list of activities into small, r
 - Keeps a library of 150 activities from the supplied lists and images
 - Recommends three activities based on your available time, energy, and mood
 - Shows a preparation checklist and a five-minute starter action
+- Finds beginner classes, clubs, and certified instructors near a city you choose
 - Saves your personal reason, real-life constraints, and usual barriers for every activity
 - Uses Rescue Mode to turn a practical problem into a smaller next step
 - Records your end-of-day Lookout reflection

@@ -67,6 +67,7 @@ function score(activity, profile) {
 }
 
 app.get('/api/activities', (req, res) => res.json(activities.map((a) => ({ ...a, progress: state.progress[a.id] }))));
+app.get('/api/profile', (req, res) => res.json(state.profile));
 app.get('/api/recommendations', (req, res) => {
   const profile = { ...state.profile, ...req.query };
   const recommended = [...activities].sort((a, b) => score(b, profile) - score(a, profile)).slice(0, 3);
@@ -79,6 +80,20 @@ app.post('/api/activities/:id/progress', (req, res) => {
   state.progress[req.params.id] = { ...current, ...req.body };
   saveState();
   res.json(state.progress[req.params.id]);
+});
+app.post('/api/activities/:id/wins', (req, res) => {
+  const current = state.progress[req.params.id];
+  if (!current) return res.status(404).json({ error: 'Unknown activity' });
+  const win = { text: String(req.body.text || 'I showed up.').slice(0, 280), createdAt: new Date().toISOString() };
+  current.completed = [win, ...(current.completed || [])];
+  current.status = 'Tried once';
+  current.percent = Math.max(current.percent || 0, 50);
+  saveState();
+  res.status(201).json(win);
+});
+app.get('/api/wins', (req, res) => {
+  const wins = activities.flatMap((activity) => (state.progress[activity.id].completed || []).map((win) => ({ ...win, activity: { id: activity.id, name: activity.name, icon: activity.icon } }))).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  res.json(wins);
 });
 app.post('/api/reflections', (req, res) => { state.reflections.unshift({ ...req.body, createdAt: new Date().toISOString() }); saveState(); res.status(201).json(state.reflections[0]); });
 app.get('/api/plans', (req, res) => {
