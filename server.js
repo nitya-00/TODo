@@ -27,6 +27,8 @@ const activities = [
 const importedNames = [
   'Acting','Canoeing','Hiking','Hunting','Rafting','Aikido','Airsoft','Skiing','Animation','Art','Gymnastics','Astrology','Astrophotography','Badminton','Baking','Basket weaving','Bhangra','Belly dance','Blogging','Jiu-jitsu','Breakdancing','Camping','DIY','Driving','Drumming','Horror makeup','Fiction story writing','Flute','Folk dance','Sewing','Hip-hop dancing','Horseback riding','Comedy','Interior design','Investments','Judo','Kite flying','Knitting','Juggling','Learn Arabic','Learn Bengali','Learn Dutch','Learn French','Learn German','Learn Punjabi','Learn British English','Thai cooking','Italian cooking','Roller skating','Magic tricks','Makeup artist','Martial arts','Meditating','Memes','Paintball','Paper crafting','Poetry writing','Puzzles','Robotics','Read fingerprinting','Scrapbooking','Scuba diving','Sightseeing','Skydiving','Soap making','Sumo','VR','Vlogging','Yoga','Wrestling','Kung fu','Video editing','Coding','Mehndi','Rangoli','Watercolour painting','West African dancing','Whale watching','Whittling','Wildlife photography','Windsurfing','Wood burning','Woodworking','Athletics','Attend concerts','Audio mastering','Audio production','BASE jumping','BMX','Bachata dancing','Backpacking','Ballet','Ballooning','Ballroom dancing','Leathercraft','Letterboxing','Line dancing','Listening to music','Locking dance','Longboarding','Luge','Lyrical dancing','Machine embroidery','Macro photography','Maculele','Motorcycle road racing','Mountain biking','Mountain climbing','Mountaineering','Muay Thai','Music festivals','Musical theatre','Musical performance','Mycology and lichens','Nail art','Nature photography','Needlepoint','Netball','Nightclubs and clubbing','Nordic skiing','Obstacle racing','Off-road racing','Open water swimming','Opera','Orienteering','Origami','Outrigger canoeing','Paddleboarding','Songwriting','Sourdough','Speed skating','Spelunking and cave diving','Spinning','Spinning yarn','Spoken word','Snorkelling','Snowboarding','Snowmobile racing','Softball'
 ];
+// Additional broad exploration ideas curated from large public hobby catalogues.
+const discoveryNames = ['Beekeeping','Birdwatching','Blacksmithing','Bookbinding','Candle making','Ceramics','Chess','Crochet','Cross-stitch','Cycling','DJing','Digital illustration','Dollhouse making','Embroidery','Fencing','Film making','Flower arranging','Foraging','Geocaching','Glass blowing','Go-karting','Graphic design','Ice skating','Improv theatre','Jewellery making','Kayaking','Lego building','Metal detecting','Model building','Mosaic art','Museum hopping','Paper quilling','Parkour','Pilates','Podcasting','Pottery','Public speaking','Rock balancing','Salsa dancing','Screen printing','Sketching','Stand-up comedy','Star gazing','Surfing','Table tennis','Taekwondo','Terrarium making','Theatre','Travel writing','Ukulele','Urban sketching','Volunteering','Watercolour illustration','Web design','Weight training','Wood carving','Board games','Card games','Dungeons and Dragons','Escape rooms','Piano','Violin','Harmonica','Beatboxing','Bonsai','Aquascaping','Fermenting','Kombucha brewing','Coffee tasting','Tea tasting','Bread making','Cake decorating','Sculpting','Clay modelling','3D printing','Electronics','Arduino','Game development','Cybersecurity','Data visualisation','Leatherworking','Upcycling','Furniture restoration','Thrifting','Antiquing','Collecting vinyl','Stamp collecting','Coin collecting','Astronomy','Meteorology','Botany','Herbalism','Fishing','Trail running','Walking tours','Picnicking','Beach combing','Yoga nidra','Breathwork'];
 const categoryFor = (name) => /dance|acting|sing|music|drum|guitar|flute|comedy|opera|theatre|spoken/i.test(name) ? 'Music & performance' : /ski|sport|judo|kung|aikido|martial|wrest|climb|bike|swim|race|badminton|gym|yoga|hike|raft|canoe|dive|skate|bmx|netball|softball|archery/i.test(name) ? 'Movement & sport' : /paint|art|craft|makeup|sew|knit|weav|origami|wood|paper|mehndi|rangoli|interior|animation|edit/i.test(name) ? 'Make & create' : /cook|baking|sourdough/i.test(name) ? 'Food & life' : /photo|garden|astro|whale|mycology|camp|sight|outdoor/i.test(name) ? 'Outdoors & nature' : /write|read|blog|journal|language|coding|robot|invest|astrology/i.test(name) ? 'Words & ideas' : 'Exploration';
 const iconFor = (category) => ({ 'Music & performance': '🎭', 'Movement & sport': '🏃', 'Make & create': '🧶', 'Food & life': '🍋', 'Outdoors & nature': '🌿', 'Words & ideas': '📚', Exploration: '✦' }[category]);
 importedNames.forEach((name) => {
@@ -34,6 +36,13 @@ importedNames.forEach((name) => {
   if (!activities.some((a) => a.id === id || a.name.toLowerCase() === name.toLowerCase())) {
     const category = categoryFor(name);
     activities.push({ id, name, icon: iconFor(category), category, energy: category === 'Movement & sport' ? 'high' : 'medium', starter: `Spend five minutes finding your personal first step for ${name}.`, prep: ['Decide what a first try looks like', 'Check the time, cost, place, and equipment', 'Choose one exact next action'], reason: `Explore what ${name} feels like in your own life.` });
+  }
+});
+discoveryNames.forEach((name) => {
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  if (!activities.some((a) => a.id === id || a.name.toLowerCase() === name.toLowerCase())) {
+    const category = categoryFor(name);
+    activities.push({ id, name, icon: iconFor(category), category, energy: category === 'Movement & sport' ? 'high' : 'medium', starter: `Spend five minutes discovering a gentle first step for ${name}.`, prep: ['Check the time, cost, place, and equipment', 'Choose a small first attempt', 'Set one realistic time'], reason: `See whether ${name} adds something new to your life.` });
   }
 });
 
@@ -45,7 +54,7 @@ state.progress = state.progress || {};
 state.reflections = state.reflections || [];
 state.plans = state.plans || [];
 state.profile = { ...freshState().profile, ...(state.profile || {}) };
-activities.forEach((activity) => { state.progress[activity.id] = state.progress[activity.id] || { status: 'Curious', percent: 0, completed: [] }; });
+activities.forEach((activity) => { state.progress[activity.id] = { status: 'Curious', percent: 0, completed: [], history: [], ...state.progress[activity.id] }; });
 function saveState() {
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
@@ -72,6 +81,7 @@ function score(activity, profile) {
 }
 
 app.get('/api/activities', (req, res) => res.json(activities.map((a) => ({ ...a, progress: state.progress[a.id] }))));
+app.get('/api/activities/:id', (req, res) => { const activity = activities.find((item) => item.id === req.params.id); if (!activity) return res.status(404).json({ error: 'Activity not found.' }); res.json({ ...activity, progress: state.progress[activity.id] }); });
 app.get('/api/profile', (req, res) => res.json(state.profile));
 app.get('/api/recommendations', (req, res) => {
   const profile = { ...state.profile, ...req.query };
@@ -88,6 +98,7 @@ app.post('/api/activities/:id/progress', (req, res) => {
   const current = state.progress[req.params.id];
   if (!current) return res.status(404).json({ error: 'Unknown activity' });
   state.progress[req.params.id] = { ...current, ...req.body };
+  state.progress[req.params.id].history.unshift({ type: 'Status update', text: `Moved to ${req.body.status || current.status}`, createdAt: new Date().toISOString() });
   saveState();
   res.json(state.progress[req.params.id]);
 });
@@ -96,6 +107,7 @@ app.post('/api/activities/:id/wins', (req, res) => {
   if (!current) return res.status(404).json({ error: 'Unknown activity' });
   const win = { text: String(req.body.text || 'I showed up.').slice(0, 280), createdAt: new Date().toISOString() };
   current.completed = [win, ...(current.completed || [])];
+  current.history = [{ type: 'Tiny win', text: win.text, createdAt: win.createdAt }, ...(current.history || [])];
   current.status = 'Tried once';
   current.percent = Math.max(current.percent || 0, 50);
   saveState();
@@ -106,6 +118,7 @@ app.get('/api/wins', (req, res) => {
   res.json(wins);
 });
 app.post('/api/reflections', (req, res) => { state.reflections.unshift({ ...req.body, createdAt: new Date().toISOString() }); saveState(); res.status(201).json(state.reflections[0]); });
+app.get('/api/reflections', (req, res) => res.json(state.reflections));
 app.get('/api/plans', (req, res) => {
   const plans = state.plans.filter((plan) => !plan.done).sort((a, b) => a.when.localeCompare(b.when));
   res.json(plans.map((plan) => ({ ...plan, activity: activities.find((activity) => activity.id === plan.activityId) })));
@@ -116,6 +129,7 @@ app.post('/api/plans', (req, res) => {
   const plan = { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, activityId, when, action, done: false, createdAt: new Date().toISOString() };
   state.plans.push(plan);
   state.progress[activityId] = { ...state.progress[activityId], status: 'Planning', percent: Math.max(state.progress[activityId].percent, 35) };
+  state.progress[activityId].history = [{ type: 'Plan', text: `${action} — ${when}`, createdAt: new Date().toISOString() }, ...(state.progress[activityId].history || [])];
   saveState();
   res.status(201).json(plan);
 });
@@ -126,5 +140,6 @@ app.post('/api/plans/:id/done', (req, res) => {
   saveState();
   res.json(plan);
 });
+app.get('/{*path}', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 if (require.main === module) app.listen(port, () => console.log(`Try Something running at http://localhost:${port}`));
 module.exports = { app };

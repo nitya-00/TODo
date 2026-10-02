@@ -4,7 +4,7 @@ A private exploration studio for turning a long list of activities into small, r
 
 ## What it does
 
-- Keeps a library of 150 activities from the supplied lists and images
+- Keeps a library of 230+ activities from your supplied lists, images, and a curated expansion of broad hobby catalogues
 - Recommends an easy win, a progress move, and a brave spark based on your available time, energy, body needs, commitments, location, budget, and mood
 - Shows a preparation checklist and a five-minute starter action
 - Finds beginner classes, clubs, and certified instructors near a city you choose

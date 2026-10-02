@@ -41,7 +41,7 @@ async function json(method, url, body) {
 
 async function run() {
   const activities = await json('GET', '/api/activities');
-  if (activities.length !== 150) throw new Error(`Expected 150 activities, received ${activities.length}.`);
+  if (activities.length < 230) throw new Error(`Expected at least 230 activities, received ${activities.length}.`);
 
   const recommendations = await json('GET', '/api/recommendations?time=20&energy=medium&body=normal&workload=normal&place=home&budget=0&mood=creativity');
   if (recommendations.map((item) => item.type).join(',') !== 'Easy win,Progress move,Brave spark') throw new Error('Recommendation types are invalid.');
