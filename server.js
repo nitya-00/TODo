@@ -37,13 +37,14 @@ importedNames.forEach((name) => {
   }
 });
 
-const statePath = path.join(__dirname, 'data', 'state.json');
-const freshState = () => ({ profile: { time: '20', energy: 'medium', place: 'home', budget: '0', mood: 'creativity' }, progress: {}, reflections: [], plans: [] });
+const statePath = process.env.TRY_SOMETHING_STATE_PATH || path.join(__dirname, 'data', 'state.json');
+const freshState = () => ({ profile: { time: '20', energy: 'medium', body: 'normal', workload: 'normal', place: 'home', budget: '0', mood: 'creativity' }, progress: {}, reflections: [], plans: [] });
 let state = freshState();
 try { state = { ...state, ...JSON.parse(fs.readFileSync(statePath, 'utf8')) }; } catch (_) { /* First run: state is created below. */ }
 state.progress = state.progress || {};
 state.reflections = state.reflections || [];
 state.plans = state.plans || [];
+state.profile = { ...freshState().profile, ...(state.profile || {}) };
 activities.forEach((activity) => { state.progress[activity.id] = state.progress[activity.id] || { status: 'Curious', percent: 0, completed: [] }; });
 function saveState() {
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
@@ -62,6 +63,10 @@ function score(activity, profile) {
   if (profile.mood === 'movement' && activity.category === 'Movement & sport') value += 18;
   if (profile.mood === 'calm' && activity.energy === 'low') value += 18;
   if (profile.time === '5' && activity.starter.length < 80) value += 10;
+  if (profile.body === 'resting' && activity.energy === 'low') value += 22;
+  if (profile.body === 'resting' && activity.energy === 'high') value -= 40;
+  if (profile.workload === 'overwhelmed' && activity.energy === 'low') value += 18;
+  if (profile.workload === 'overwhelmed' && activity.energy === 'high') value -= 24;
   if (profile.place === 'home' && ['Archery', 'Sport climbing'].includes(activity.name)) value -= 25;
   return value + (personal.status === 'Planning' ? 12 : 0);
 }
@@ -70,8 +75,13 @@ app.get('/api/activities', (req, res) => res.json(activities.map((a) => ({ ...a,
 app.get('/api/profile', (req, res) => res.json(state.profile));
 app.get('/api/recommendations', (req, res) => {
   const profile = { ...state.profile, ...req.query };
-  const recommended = [...activities].sort((a, b) => score(b, profile) - score(a, profile)).slice(0, 3);
-  res.json(recommended.map((a, index) => ({ ...a, progress: state.progress[a.id], type: ['Easy win', 'Progress move', 'Brave spark'][index] })));
+  const candidates = activities.filter((activity) => !['Loved', 'Not for me', 'Left it for now'].includes(state.progress[activity.id].status)).sort((a, b) => score(b, profile) - score(a, profile));
+  const choose = (predicate, selected) => candidates.find((activity) => !selected.includes(activity) && predicate(activity)) || candidates.find((activity) => !selected.includes(activity));
+  const selected = [];
+  selected.push(choose((activity) => activity.energy === 'low' || profile.time === '5', selected));
+  selected.push(choose((activity) => state.progress[activity.id].percent > 0, selected));
+  selected.push(choose((activity) => activity.category !== selected[0]?.category && activity.category !== selected[1]?.category, selected));
+  res.json(selected.filter(Boolean).map((a, index) => ({ ...a, progress: state.progress[a.id], type: ['Easy win', 'Progress move', 'Brave spark'][index] })));
 });
 app.post('/api/profile', (req, res) => { state.profile = { ...state.profile, ...req.body }; saveState(); res.json(state.profile); });
 app.post('/api/activities/:id/progress', (req, res) => {
@@ -116,4 +126,5 @@ app.post('/api/plans/:id/done', (req, res) => {
   saveState();
   res.json(plan);
 });
-app.listen(port, () => console.log(`Try Something running at http://localhost:${port}`));
+if (require.main === module) app.listen(port, () => console.log(`Try Something running at http://localhost:${port}`));
+module.exports = { app };

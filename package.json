@@ -2,6 +2,6 @@
   "name": "try-something",
   "version": "1.0.0",
   "private": true,
-  "scripts": { "start": "node server.js" },
+  "scripts": { "start": "node server.js", "test": "node test-backend.js" },
   "dependencies": { "express": "^5.1.0" }
 }
