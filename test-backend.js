@@ -69,6 +69,8 @@ async function run() {
   await json('POST', '/api/activities/calligraphy/progress', { status: 'Problem-solving', percent: 65, activeProblem: 'No time' });
   const updatedCalligraphy = (await json('GET', '/api/activities')).find((activity) => activity.id === 'calligraphy');
   if (updatedCalligraphy.progress.status !== 'Problem-solving' || updatedCalligraphy.progress.percent !== 65) throw new Error('Rescue/progress state was not saved.');
+  await json('POST', '/api/activities/calligraphy/progress', { status: 'Prepare', percent: 1 });
+  if ((await json('GET', '/api/activities/calligraphy')).progress.percent !== 50) throw new Error('Phase percentage was not enforced.');
   await json('POST', '/api/reflections', { did: 'Tested every endpoint', learned: 'Tests protect real data', next: 'Run the app' });
   const reflections = await json('GET', '/api/reflections');
   if (reflections[0]?.did !== 'Tested every endpoint') throw new Error('Daily Lookout endpoint did not persist.');

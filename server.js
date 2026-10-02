@@ -4,6 +4,7 @@ const fs = require('fs');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const phasePercent = { Curious: 15, Research: 30, Prepare: 50, Try: 60, Solve: 80, Return: 90, Explore: 100 };
 app.use(express.json());
 app.use((req, res, next) => { if (req.path === '/app.js') res.set('Cache-Control', 'no-store'); next(); });
 app.use(express.static(path.join(__dirname, 'public')));
@@ -59,6 +60,7 @@ activities.forEach((activity) => { state.progress[activity.id] = { status: 'Curi
 // Preserve entries saved before timelines were introduced.
 activities.forEach((activity) => {
   const progress = state.progress[activity.id];
+  progress.history = (progress.history || []).filter((event) => event.type !== 'Status update');
   const known = new Set((progress.history || []).map((event) => `${event.type}:${event.text}:${event.createdAt}`));
   (progress.completed || []).forEach((win) => {
     const key = `Tiny win:${win.text}:${win.createdAt}`;
@@ -136,7 +138,7 @@ app.post('/api/activities/:id/progress', (req, res) => {
   const current = state.progress[req.params.id];
   if (!current) return res.status(404).json({ error: 'Unknown activity' });
   state.progress[req.params.id] = { ...current, ...req.body };
-  state.progress[req.params.id].history.unshift({ type: 'Status update', text: `Moved to ${req.body.status || current.status}`, createdAt: new Date().toISOString() });
+  if (phasePercent[req.body.status]) state.progress[req.params.id].percent = phasePercent[req.body.status];
   saveState();
   res.json(state.progress[req.params.id]);
 });
