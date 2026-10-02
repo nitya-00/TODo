@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  activities   UserActivity[]
+  reflections  Reflection[]
+  createdAt    DateTime   @default(now())
+}
+
+model Activity {
+  id       String         @id
+  name     String
+  category String
+  users    UserActivity[]
+}
+
+model UserActivity {
+  id         String   @id @default(cuid())
+  userId     String
+  activityId String
+  status     String   @default("Curious")
+  percent    Int      @default(0)
+  why        String?
+  user       User     @relation(fields: [userId], references: [id])
+  activity   Activity @relation(fields: [activityId], references: [id])
+  @@unique([userId, activityId])
+}
+
+model Reflection {
+  id        String   @id @default(cuid())
+  userId    String
+  did       String?
+  learned   String?
+  next      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}

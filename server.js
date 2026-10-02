@@ -5,6 +5,7 @@ const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 3000;
 app.use(express.json());
+app.use((req, res, next) => { if (req.path === '/app.js') res.set('Cache-Control', 'no-store'); next(); });
 app.use(express.static(path.join(__dirname, 'public')));
 
 const activities = [
@@ -55,6 +56,16 @@ state.reflections = state.reflections || [];
 state.plans = state.plans || [];
 state.profile = { ...freshState().profile, ...(state.profile || {}) };
 activities.forEach((activity) => { state.progress[activity.id] = { status: 'Curious', percent: 0, completed: [], history: [], ...state.progress[activity.id] }; });
+// Preserve entries saved before timelines were introduced.
+activities.forEach((activity) => {
+  const progress = state.progress[activity.id];
+  const known = new Set((progress.history || []).map((event) => `${event.type}:${event.text}:${event.createdAt}`));
+  (progress.completed || []).forEach((win) => {
+    const key = `Tiny win:${win.text}:${win.createdAt}`;
+    if (!known.has(key)) progress.history.push({ type: 'Tiny win', text: win.text, createdAt: win.createdAt });
+  });
+  progress.history.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+});
 function saveState() {
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
@@ -69,26 +80,53 @@ function score(activity, profile) {
   if (personal?.status === 'Problem-solving') value += 12;
   if (activity.energy === profile.energy) value += 24;
   if (profile.mood === 'creativity' && activity.category === 'Make & create') value += 18;
-  if (profile.mood === 'movement' && activity.category === 'Movement & sport') value += 18;
+  if (profile.mood === 'movement' && activity.category === 'Movement & sport') value += 32;
   if (profile.mood === 'calm' && activity.energy === 'low') value += 18;
-  if (profile.time === '5' && activity.starter.length < 80) value += 10;
+  if (profile.mood === 'learning' && ['Words & ideas', 'Tech & building'].includes(activity.category)) value += 30;
+  if (profile.mood === 'social' && ['Music & performance', 'Movement & sport'].includes(activity.category)) value += 26;
+  if (profile.mood === 'adventure' && ['Outdoors & nature', 'Movement & sport'].includes(activity.category)) value += 32;
+  if (profile.mood === 'comfort' && ['Food & life', 'Make & create'].includes(activity.category)) value += 28;
+  if (profile.mood === 'connection' && ['Music & performance', 'Food & life'].includes(activity.category)) value += 26;
+  if (profile.mood === 'courage' && activity.energy === 'high') value += 24;
+  if (profile.time === '30' && ['Make & create', 'Words & ideas', 'Food & life'].includes(activity.category)) value += 16;
+  if (profile.time === '60' && ['Movement & sport', 'Outdoors & nature'].includes(activity.category)) value += 14;
+  if (profile.time === 'day' && ['Outdoors & nature', 'Food & life'].includes(activity.category)) value += 20;
+  if (profile.time === 'week' && ['Words & ideas', 'Make & create', 'Learning'].includes(activity.category)) value += 18;
+  if (profile.time === '15days' && ['Movement & sport', 'Outdoors & nature', 'Music & performance'].includes(activity.category)) value += 18;
   if (profile.body === 'resting' && activity.energy === 'low') value += 22;
   if (profile.body === 'resting' && activity.energy === 'high') value -= 40;
   if (profile.workload === 'overwhelmed' && activity.energy === 'low') value += 18;
   if (profile.workload === 'overwhelmed' && activity.energy === 'high') value -= 24;
-  if (profile.place === 'home' && ['Archery', 'Sport climbing'].includes(activity.name)) value -= 25;
+  if (profile.place === 'home' && ['Make & create', 'Words & ideas', 'Food & life'].includes(activity.category)) value += 15;
+  if (profile.place === 'home' && ['Movement & sport', 'Outdoors & nature'].includes(activity.category)) value -= 12;
+  if (profile.place === 'outside' && ['Movement & sport', 'Outdoors & nature'].includes(activity.category)) value += 18;
+  if (profile.budget === '0' && ['Make & create', 'Words & ideas', 'Outdoors & nature'].includes(activity.category)) value += 10;
+  if (profile.budget === '0' && activity.category === 'Movement & sport') value -= 8;
   return value + (personal.status === 'Planning' ? 12 : 0);
 }
 
 app.get('/api/activities', (req, res) => res.json(activities.map((a) => ({ ...a, progress: state.progress[a.id] }))));
 app.get('/api/activities/:id', (req, res) => { const activity = activities.find((item) => item.id === req.params.id); if (!activity) return res.status(404).json({ error: 'Activity not found.' }); res.json({ ...activity, progress: state.progress[activity.id] }); });
+app.post('/api/activities', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Activity name is required.' });
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  if (activities.some((activity) => activity.id === id)) return res.status(409).json({ error: 'That activity already exists.' });
+  const category = req.body.category || 'Exploration';
+  const activity = { id, name, icon: iconFor(category), category, energy: req.body.energy || 'medium', starter: req.body.starter || `Spend 30 minutes finding your first step for ${name}.`, prep: req.body.prep || ['Choose one realistic first action'], reason: req.body.reason || `Explore whether ${name} belongs in your life.` };
+  activities.push(activity);
+  state.progress[id] = { status: 'Curious', percent: 0, completed: [], history: [] };
+  saveState();
+  res.status(201).json({ ...activity, progress: state.progress[id] });
+});
 app.get('/api/profile', (req, res) => res.json(state.profile));
 app.get('/api/recommendations', (req, res) => {
   const profile = { ...state.profile, ...req.query };
   const candidates = activities.filter((activity) => !['Loved', 'Not for me', 'Left it for now'].includes(state.progress[activity.id].status)).sort((a, b) => score(b, profile) - score(a, profile));
   const choose = (predicate, selected) => candidates.find((activity) => !selected.includes(activity) && predicate(activity)) || candidates.find((activity) => !selected.includes(activity));
   const selected = [];
-  selected.push(choose((activity) => activity.energy === 'low' || profile.time === '5', selected));
+  const gentleDay = profile.body === 'resting' || profile.workload === 'overwhelmed' || profile.time === '30';
+  selected.push(choose((activity) => gentleDay ? activity.energy === 'low' : (profile.mood === 'movement' ? activity.category === 'Movement & sport' : activity.category === 'Make & create'), selected));
   selected.push(choose((activity) => state.progress[activity.id].percent > 0, selected));
   selected.push(choose((activity) => activity.category !== selected[0]?.category && activity.category !== selected[1]?.category, selected));
   res.json(selected.filter(Boolean).map((a, index) => ({ ...a, progress: state.progress[a.id], type: ['Easy win', 'Progress move', 'Brave spark'][index] })));
@@ -106,10 +144,11 @@ app.post('/api/activities/:id/wins', (req, res) => {
   const current = state.progress[req.params.id];
   if (!current) return res.status(404).json({ error: 'Unknown activity' });
   const win = { text: String(req.body.text || 'I showed up.').slice(0, 280), createdAt: new Date().toISOString() };
+  const previousWins = (current.completed || []).length;
   current.completed = [win, ...(current.completed || [])];
   current.history = [{ type: 'Tiny win', text: win.text, createdAt: win.createdAt }, ...(current.history || [])];
   current.status = 'Tried once';
-  current.percent = Math.max(current.percent || 0, 50);
+  current.percent = previousWins === 0 ? Math.max(current.percent || 0, 50) : Math.min(90, Math.max(current.percent || 50, 50) + 10);
   saveState();
   res.status(201).json(win);
 });

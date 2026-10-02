@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://todo:7999@postgres:5432/try_something?schema=public
+      SESSION_SECRET: 
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - app_data:/app/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: try_something
+      POSTGRES_USER: try_something
+      POSTGRES_PASSWORD: try_something_dev_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U try_something -d try_something"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  app_data:
+  postgres_data:

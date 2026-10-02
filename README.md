@@ -25,6 +25,24 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+`npm start` runs both the Express backend and the frontend served by that backend on port `3000`.
+
+## Run with Docker and PostgreSQL
+
+Docker starts the app and a private PostgreSQL container together:
+
+```bash
+docker compose up --build
+```
+
+Then open [http://localhost:3000](http://localhost:3000). The development PostgreSQL username is `try_something`, the database is `try_something`, and the development password is `try_something_dev_password`. Change both the password and `SESSION_SECRET` before deploying publicly.
+
+Stop the containers with:
+
+```bash
+docker compose down
+```
+
 To stop the app, return to the terminal and press `Ctrl+C`.
 
 ## Test the backend
@@ -47,6 +65,10 @@ The test exercises the complete API using temporary data, so it never changes yo
 ## Data and privacy
 
 The app stores your selections, progress, personal plans, and reflections in `data/state.json` on your own computer. That file is excluded from Git, so it is not meant to be committed or shared.
+
+## Prisma and deployment database
+
+The PostgreSQL Prisma data model is in `prisma/schema.prisma`, and `.env.example` lists the required deployment variables. The current local app remains JSON-backed until a PostgreSQL `DATABASE_URL` is supplied and the Prisma migration/authentication layer is activated.
 
 To start fresh, stop the app and delete only this file:
 

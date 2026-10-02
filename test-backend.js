@@ -42,9 +42,15 @@ async function json(method, url, body) {
 async function run() {
   const activities = await json('GET', '/api/activities');
   if (activities.length < 230) throw new Error(`Expected at least 230 activities, received ${activities.length}.`);
+  const calligraphy = await json('GET', '/api/activities/calligraphy');
+  if (calligraphy.name !== 'Calligraphy') throw new Error('Individual activity endpoint returned the wrong activity.');
+  const created = await json('POST', '/api/activities', { name: 'Backend test activity', energy: 'low', starter: 'Write an endpoint test.' });
+  if (created.id !== 'backend-test-activity') throw new Error('Add Activity endpoint did not create the activity.');
 
   const recommendations = await json('GET', '/api/recommendations?time=20&energy=medium&body=normal&workload=normal&place=home&budget=0&mood=creativity');
   if (recommendations.map((item) => item.type).join(',') !== 'Easy win,Progress move,Brave spark') throw new Error('Recommendation types are invalid.');
+  const activeRecommendations = await json('GET', '/api/recommendations?time=60&energy=high&body=active&workload=light&place=outside&budget=flexible&mood=movement');
+  if (recommendations.map((item) => item.id).join(',') === activeRecommendations.map((item) => item.id).join(',')) throw new Error('Recommendation parameters did not change the activity choices.');
 
   await json('POST', '/api/profile', { body: 'resting', workload: 'overwhelmed', city: 'Test City' });
   const profile = await json('GET', '/api/profile');
@@ -55,11 +61,17 @@ async function run() {
   await json('POST', `/api/plans/${plan.id}/done`);
 
   await json('POST', '/api/activities/calligraphy/wins', { text: 'Test tiny win' });
+  await json('POST', '/api/activities/calligraphy/wins', { text: 'Second test tiny win' });
   if (!(await json('GET', '/api/wins')).some((item) => item.text === 'Test tiny win')) throw new Error('Tiny win was not saved.');
+  const afterWins = await json('GET', '/api/activities/calligraphy');
+  if (afterWins.progress.percent !== 60) throw new Error('A repeated tiny win did not advance progress.');
 
   await json('POST', '/api/activities/calligraphy/progress', { status: 'Problem-solving', percent: 65, activeProblem: 'No time' });
-  const calligraphy = (await json('GET', '/api/activities')).find((activity) => activity.id === 'calligraphy');
-  if (calligraphy.progress.status !== 'Problem-solving' || calligraphy.progress.percent !== 65) throw new Error('Rescue/progress state was not saved.');
+  const updatedCalligraphy = (await json('GET', '/api/activities')).find((activity) => activity.id === 'calligraphy');
+  if (updatedCalligraphy.progress.status !== 'Problem-solving' || updatedCalligraphy.progress.percent !== 65) throw new Error('Rescue/progress state was not saved.');
+  await json('POST', '/api/reflections', { did: 'Tested every endpoint', learned: 'Tests protect real data', next: 'Run the app' });
+  const reflections = await json('GET', '/api/reflections');
+  if (reflections[0]?.did !== 'Tested every endpoint') throw new Error('Daily Lookout endpoint did not persist.');
 }
 
 run()

@@ -2,6 +2,15 @@
   "name": "try-something",
   "version": "1.0.0",
   "private": true,
-  "scripts": { "start": "node server.js", "test": "node test-backend.js" },
-  "dependencies": { "express": "^5.1.0" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-backend.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "prisma": "^8.0.0-rc.19"
+  }
 }
