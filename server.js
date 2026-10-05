@@ -1,13 +1,19 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const usesSupabase = Boolean(supabaseUrl && supabaseKey);
+let stateRequestQueue = Promise.resolve();
 const phasePercent = { Curious: 15, Research: 30, Prepare: 50, Try: 60, Solve: 80, Return: 90, Explore: 100 };
 app.use(express.json());
 app.use((req, res, next) => { if (req.path === '/app.js') res.set('Cache-Control', 'no-store'); next(); });
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/api/config', (req, res) => res.json({ supabaseUrl: supabaseUrl || null, supabaseKey: supabaseKey || null }));
 
 const activities = [
   { id: 'calligraphy', name: 'Calligraphy', icon: '✒️', category: 'Make & create', energy: 'low', starter: 'Trace one letter slowly for five minutes.', prep: ['A pen or pencil', 'One sheet of paper', 'A quiet corner'], reason: 'Make something beautiful with your hands.' },
@@ -69,10 +75,48 @@ activities.forEach((activity) => {
   progress.history.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 });
 function saveState() {
+  // Vercel's filesystem is not persistent. A configured deployment saves at
+  // the end of each API request using the authenticated Supabase user instead.
+  if (usesSupabase) return;
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
 saveState();
+
+function normaliseState(saved) {
+  const next = { ...freshState(), ...(saved || {}) };
+  next.progress = next.progress || {};
+  next.reflections = next.reflections || [];
+  next.plans = next.plans || [];
+  next.profile = { ...freshState().profile, ...(next.profile || {}) };
+  activities.forEach((activity) => {
+    next.progress[activity.id] = { status: 'Curious', percent: 0, completed: [], history: [], ...next.progress[activity.id] };
+  });
+  return next;
+}
+
+// Locally the app continues to use data/state.json. In Vercel, setting both
+// Supabase variables turns this into a user-specific, RLS-protected backend.
+// The queue prevents the legacy synchronous API handlers from mixing user data.
+app.use('/api', (req, res, next) => {
+  if (!usesSupabase) return next();
+  stateRequestQueue = stateRequestQueue.then(() => new Promise(async (release) => {
+    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) { res.status(401).json({ error: 'Sign in is required.' }); release(); return; }
+    const client = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data: userData, error: userError } = await client.auth.getUser(token);
+    if (userError || !userData.user) { res.status(401).json({ error: 'Your sign-in has expired.' }); release(); return; }
+    const { data: saved, error: loadError } = await client.from('app_states').select('state').eq('user_id', userData.user.id).maybeSingle();
+    if (loadError) { res.status(500).json({ error: 'Could not load your Supabase data.' }); release(); return; }
+    state = normaliseState(saved?.state);
+    res.once('finish', () => {
+      client.from('app_states').upsert({ user_id: userData.user.id, state, updated_at: new Date().toISOString() })
+        .then(({ error }) => { if (error) console.error('Supabase save failed:', error.message); })
+        .finally(release);
+    });
+    next();
+  })).catch((error) => { console.error('Supabase request failed:', error); if (!res.headersSent) res.status(500).json({ error: 'Supabase is temporarily unavailable.' }); });
+});
 
 function score(activity, profile) {
   let value = 40;

@@ -6,7 +6,14 @@ $('.controls').insertAdjacentHTML('afterbegin', '<label>Body<select id="body"><o
 $('#time').innerHTML = '<option value="30" selected>30 minutes</option><option value="60">1 hour</option><option value="day">1 day</option><option value="week">1 week</option><option value="15days">15 days</option>';
 $('#mood').innerHTML = '<option value="creativity">Creative</option><option value="calm">Calm</option><option value="movement">Movement</option><option value="courage">Courage</option><option value="social">Social</option><option value="learning">Learning</option><option value="adventure">Adventure</option><option value="comfort">Comfort</option><option value="connection">Connection</option>';
 
-async function request(url, options) { const res = await fetch(url, options); if (!res.ok) throw new Error(`Request failed: ${res.status}`); return res.json(); }
+async function request(url, options = {}) {
+  const token = await window.currentAccessToken?.();
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
 async function loadProfile() { const profile = await request('/api/profile'); ['time','energy','body','workload','place','budget','mood'].forEach((key) => { if (profile[key] && $('#'+key)) $('#'+key).value = profile[key]; }); }
 function progressText(percent) { if (percent === 0) return 'Curious'; if (percent < 35) return 'Preparing'; if (percent < 65) return 'Tried once'; if (percent < 90) return 'Returning'; return 'Explored'; }
 function card(activity, recommendation) { return `<article class="card"><span class="tag">${recommendation ? activity.type.toUpperCase() : activity.category.toUpperCase()}</span><div class="activity-icon">${activity.icon}</div><h3>${activity.name}</h3><p>${activity.starter}</p><a href="/${activity.id}" class="open" style="color:inherit">Open this door →</a></article>`; }
@@ -99,8 +106,7 @@ function addNavigation() {
   $('header').insertAdjacentHTML('afterend', `<nav id="mainNav" aria-label="Main navigation" style="display:flex;gap:8px;overflow-x:auto;padding:16px 0 24px;border-bottom:1px solid #d9cdc0;margin-bottom:24px">${link('/', '✦ Explore')}${link('/curiosity', '☾ Activities')}${link('/recent', '▣ Recent')}${link('/add', '+ Add Activity')}</nav>`);
 }
 async function renderActivityPage(id) {
-  const response = await fetch(`/api/activities/${id}`); if (!response.ok) return;
-  const activity = await response.json();
+  let activity; try { activity = await request(`/api/activities/${id}`); } catch (_) { return; }
   document.querySelectorAll('main > section').forEach(section => section.style.display = 'none');
   $('.controls').style.display = 'none';
   $('.shell').insertAdjacentHTML('beforeend', `<section class="activity-page"><p class="eyebrow">YOUR EXPLORATION</p><a href="/curiosity">← Back to curiosity map</a><h2>${activity.icon} ${activity.name}</h2><p>${activity.reason}</p><button id="logToday">+ Log what I did today</button><div class="journey"><div class="journey-head"><span>${activity.progress.status}</span><span>${activity.progress.percent}% explored</span></div><div class="journey-bar"><i style="width:${activity.progress.percent}%"></i></div><small>Curious → Research → Prepare → Try → Solve → Return → Explore</small></div><div class="prep"><strong>Your answers</strong><p><b>Why:</b> ${activity.progress.why || 'Not answered yet.'}</p><p><b>Real-life plan:</b> ${activity.progress.commitmentPlan || 'Not answered yet.'}</p><p><b>Usual barrier:</b> ${activity.progress.knownBarrier || 'Not answered yet.'}</p></div><h3>Everything that happened</h3><div class="timeline">${(activity.progress.history || []).map(event => `<article class="activity"><small>${new Date(event.createdAt).toLocaleString()}</small><strong>${event.type}</strong><p>${event.text}</p></article>`).join('') || '<p>Your research, plans, small wins, and changes will appear here.</p>'}</div></section>`);
@@ -115,4 +121,18 @@ async function renderActivityPage(id) {
 async function renderRecentPage() { document.querySelectorAll('main > section').forEach(section => section.style.display = 'none'); const reflections = await request('/api/reflections'); $('.shell').insertAdjacentHTML('beforeend', `<section class="activity-page"><p class="eyebrow">YOUR RECENT EVIDENCE</p><h2>Daily Lookout</h2><p>Every honest check-in you have written.</p><div class="timeline">${reflections.map(reflection => `<article class="activity"><small>${new Date(reflection.createdAt).toLocaleDateString()}</small><strong>${reflection.did || 'A quiet day'}</strong><p>${reflection.learned || ''}</p><p><b>Next:</b> ${reflection.next || ''}</p></article>`).join('') || '<p>Your Daily Lookout entries will appear here.</p>'}</div></section>`); }
 function renderAddPage() { document.querySelectorAll('main > section').forEach(section => section.style.display = 'none'); $('.shell').insertAdjacentHTML('beforeend', '<section class="activity-page"><p class="eyebrow">ADD A NEW SPARK</p><h2>What do you want to try?</h2><form id="addActivityForm"><label>Name<input id="newName" required></label><label>Why does it interest you?<textarea id="newReason"></textarea></label><label>First 30-minute action<textarea id="newStarter"></textarea></label><label>Energy<select id="newEnergy"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label><button>Add to my curiosity map</button></form></section>'); $('#addActivityForm').onsubmit = async event => { event.preventDefault(); const activity = await request('/api/activities', {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:$('#newName').value,reason:$('#newReason').value,starter:$('#newStarter').value,energy:$('#newEnergy').value})}); window.location.href = `/${activity.id}`; }; }
 function renderCuriosityPage() { document.querySelectorAll('main > section').forEach(section => { if (!section.querySelector('#library')) section.style.display = 'none'; }); }
-loadProfile().then(() => loadActivities()).then(async () => { addNavigation(); const id = window.location.pathname.slice(1); if (id === 'curiosity') return renderCuriosityPage(); if (id === 'recent') return renderRecentPage(); if (id === 'add') return renderAddPage(); if (id && activities.some(activity => activity.id === id)) return renderActivityPage(id); await loadRecommendations(); await loadPlans(); await loadProblems(); await loadWins(); document.querySelector('#library').closest('section').style.display = 'none'; });
+(async () => {
+  const auth = await window.authReady;
+  if (auth && !(await window.currentAccessToken())) { window.showSignIn(); return; }
+  const session = auth ? (await auth.auth.getSession()).data.session : null;
+  if (session) $('#signInButton').textContent = 'Sign out';
+  if (session) $('#signInButton').onclick = window.signOut;
+  await loadProfile(); await loadActivities(); addNavigation();
+  const id = window.location.pathname.slice(1);
+  if (id === 'curiosity') return renderCuriosityPage();
+  if (id === 'recent') return renderRecentPage();
+  if (id === 'add') return renderAddPage();
+  if (id && activities.some(activity => activity.id === id)) return renderActivityPage(id);
+  await loadRecommendations(); await loadPlans(); await loadProblems(); await loadWins();
+  document.querySelector('#library').closest('section').style.display = 'none';
+})().catch((error) => { console.error(error); $('#recommendations').innerHTML = '<p>Could not connect to your saved data. Please sign in again or check the deployment settings.</p>'; });
