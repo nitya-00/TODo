@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -7,6 +8,11 @@ const app = express();
 const port = process.env.PORT || 3000;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+
+
+
+
+
 const usesSupabase = Boolean(supabaseUrl && supabaseKey);
 let stateRequestQueue = Promise.resolve();
 const phasePercent = { Curious: 15, Research: 30, Prepare: 50, Try: 60, Solve: 80, Return: 90, Explore: 100 };
