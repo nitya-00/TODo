@@ -40,10 +40,14 @@ window.finishSignIn = async (event) => {
   if (!/^[^\s@]+@gmail\.com$/i.test(email)) { status.textContent = 'Please use a Gmail address.'; return; }
   submit.disabled = true;
   status.textContent = 'Signing you in…';
-  let result = await client.auth.signInWithPassword({ email, password });
-  if (result.error && /invalid login credentials/i.test(result.error.message)) {
-    result = await client.auth.signUp({ email, password, options: { data: { name } } });
-  }
+  // let result = await client.auth.signInWithPassword({ email, password });
+  // if (result.error && /invalid login credentials/i.test(result.error.message)) {
+  //   result = await client.auth.signUp({ email, password, options: { data: { name } } });
+  // }
+  const result = await client.auth.signInWithPassword({
+  email,
+  password
+});
   submit.disabled = false;
   if (result.error) { status.textContent = result.error.message; return; }
   if (!result.data.session) {
